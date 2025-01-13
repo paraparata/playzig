@@ -30,17 +30,15 @@ test "test calcDecodeLen" {
 }
 
 pub const Base64 = struct {
-    _table: *const [64]u8,
+    char_set: *const [64]u8,
 
     pub fn init() Base64 {
-        const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const lower = "abcdefghijklmnopqrstuvwxyz";
-        const numbers_symb = "0123456789+/";
-        return Base64{ ._table = upper ++ lower ++ numbers_symb };
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        return Base64{ .char_set = chars };
     }
 
     pub fn charAt(self: Base64, i: u8) u8 {
-        return self._table[i];
+        return self.char_set[i];
     }
 
     pub fn encode(self: Base64, allocator: std.mem.Allocator, input: []const u8) ![]u8 {
@@ -87,14 +85,67 @@ pub const Base64 = struct {
 
         return out;
     }
+
+    pub fn decode(self: Base64, allocator: std.mem.Allocator, input: []const u8) ![]const u8 {
+        if (input.len == 0) {
+            return "";
+        }
+
+        const nOut = try calcDecodeLen(input);
+        var out = try allocator.alloc(u8, nOut);
+        var buf = [4]u8{ 0, 0, 0, 0 };
+        var count: u8 = 0;
+        var iOut: u64 = 0;
+
+        for (input) |char| {
+            const char_index: u8 = @intCast(std.mem.indexOf(u8, self.char_set, &[1]u8{char}) orelse 64);
+            buf[count] = char_index;
+            count += 1;
+            if (count == 4) {
+                out[iOut] = (buf[0] << 2) + (buf[1] >> 4);
+                if (buf[2] != 64) {
+                    out[iOut + 1] = (buf[1] << 4) + (buf[2] >> 2);
+                }
+                if (buf[3] != 64) {
+                    out[iOut + 2] = (buf[2] << 6) + buf[3];
+                }
+                iOut += 3;
+                count = 0;
+            }
+        }
+
+        const res = std.mem.trim(u8, out, "\xaa");
+        return res;
+    }
 };
 
-test "test base64" {
+test "base64 encode" {
     const base64 = Base64.init();
     var memBuf: [1000]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&memBuf);
     const allocator = fba.allocator();
 
     const encoded = try base64.encode(allocator, "saha");
-    try testing.expectEqual("c2FoYQo=", encoded);
+    try testing.expectEqualStrings("c2FoYQ==", encoded);
 }
+
+test "base64 decode" {
+    const base64 = Base64.init();
+    var memBuf: [1000]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&memBuf);
+    const allocator = fba.allocator();
+
+    const decoded = try base64.decode(allocator, "c2FoYQ==");
+    try testing.expectEqualStrings("saha", decoded);
+}
+
+// test "std indexOf" {
+//     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+//     const str = "c2FoYQ==";
+//     for (str) |char| {
+//         const index: u8 = @intCast(std.mem.indexOf(u8, chars, &[1]u8{char}) orelse 64);
+//         std.log.warn("{}: {}\n", .{ char, index });
+//     }
+//
+//     try testing.expectEqual(true, true);
+// }
