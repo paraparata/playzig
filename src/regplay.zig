@@ -3,7 +3,7 @@ const math = std.math;
 const fs = std.fs;
 
 const fourcc = [4]i8;
-const sample_t = i16;
+const sample_t = u8;
 const SAMPLE_MAX = 8000;
 
 const RiffHdr = extern struct {
@@ -84,11 +84,11 @@ pub fn create() !void {
     _ = try writer.writeStruct(hdr);
 
     // assign buffer
-    var i: isize = 0;
+    var i: usize = 0;
     while (i < NSAMPLES) : (i += 1) {
-        const iI: f32 = @floatFromInt(i);
-        const calc: f32 = SAMPLE_MAX * math.sin(2 * math.phi * 440 * (iI / SR));
-        const val: sample_t = @intFromFloat(calc);
+        // const iI: f32 = @floatFromInt(i);
+        // const calc: f32 = SAMPLE_MAX * math.sin(2 * math.phi * 440 * (iI / SR));
+        const val: sample_t = @intCast(i * 5 & i >> 7 | i * 3 & i >> 10);
         try writer.writeInt(sample_t, val, .little);
     }
 
